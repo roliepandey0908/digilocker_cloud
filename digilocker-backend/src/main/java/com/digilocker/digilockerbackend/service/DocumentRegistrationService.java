@@ -28,7 +28,79 @@ public class DocumentRegistrationService {
     public DocumentRegistrationService(DynamoDbClient dynamoDbClient) {
         this.dynamoDbClient = dynamoDbClient;
     }
+    public void markDocumentUploaded(
+            String documentId,
+            String issuerId,
+            String enrollmentId,
+            String documentType,
+            Integer passingYear,
+            String s3VersionId
+    ) {
+        if (s3VersionId == null || s3VersionId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "S3 version ID is required"
+            );
+        }
 
+        String repositorySortKey =
+                "RECORD#"
+                        + enrollmentId + "#"
+                        + documentType + "#"
+                        + passingYear + "#"
+                        + documentId;
+
+        // Update canonical metadata and save the exact S3 version.
+        Update metadataUpdate = Update.builder()
+                .tableName(tableName)
+                .key(Map.of(
+                        "PK", av("DOC#" + documentId),
+                        "SK", av("METADATA")
+                ))
+                .updateExpression(
+                        "SET #status = :newStatus, s3VersionId = :versionId"
+                )
+                .conditionExpression("#status = :expectedStatus")
+                .expressionAttributeNames(Map.of(
+                        "#status", "status"
+                ))
+                .expressionAttributeValues(Map.of(
+                        ":newStatus", av("UPLOADED"),
+                        ":expectedStatus", av("PENDING_UPLOAD"),
+                        ":versionId", av(s3VersionId)
+                ))
+                .build();
+
+        // Update issuer repository status.
+        Update repositoryUpdate = Update.builder()
+                .tableName(tableName)
+                .key(Map.of(
+                        "PK", av("ISSUER#" + issuerId),
+                        "SK", av(repositorySortKey)
+                ))
+                .updateExpression("SET #status = :newStatus")
+                .conditionExpression("#status = :expectedStatus")
+                .expressionAttributeNames(Map.of(
+                        "#status", "status"
+                ))
+                .expressionAttributeValues(Map.of(
+                        ":newStatus", av("UPLOADED"),
+                        ":expectedStatus", av("PENDING_UPLOAD")
+                ))
+                .build();
+
+        dynamoDbClient.transactWriteItems(
+                TransactWriteItemsRequest.builder()
+                        .transactItems(
+                                TransactWriteItem.builder()
+                                        .update(metadataUpdate)
+                                        .build(),
+                                TransactWriteItem.builder()
+                                        .update(repositoryUpdate)
+                                        .build()
+                        )
+                        .build()
+        );
+    }
     // Update canonical metadata and issuer repository atomically.
     public void updateDocumentStatus(
             String documentId,

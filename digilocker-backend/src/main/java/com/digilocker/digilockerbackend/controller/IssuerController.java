@@ -124,22 +124,22 @@ public class IssuerController {
         );
 
         // 7. Upload PDF to S3
-        String s3Key = s3DocumentService.uploadIncomingDocument(
-                file,
-                issuerId,
-                documentType,
-                documentId
-        );
+        S3DocumentService.UploadedDocument uploadedDocument =
+                s3DocumentService.uploadIncomingDocument(
+                        file,
+                        issuerId,
+                        documentType,
+                        documentId
+                );
 
         // 8. Mark document as UPLOADED
-        documentRegistrationService.updateDocumentStatus(
+        documentRegistrationService.markDocumentUploaded(
                 documentId,
                 issuerId,
                 enrollmentId,
                 documentType,
                 passingYear,
-                "PENDING_UPLOAD",
-                "UPLOADED"
+                uploadedDocument.versionId()
         );
 
         // 9. Prepare response

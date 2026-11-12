@@ -1,4 +1,3 @@
-
 package com.digilocker.digilockerbackend.service;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -8,9 +7,9 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
 import java.io.IOException;
-import java.util.UUID;
 
 @Service
 public class S3DocumentService {
@@ -24,7 +23,13 @@ public class S3DocumentService {
         this.s3Client = s3Client;
     }
 
-    public String uploadIncomingDocument(
+    // Holds the S3 object key and its exact version ID.
+    public record UploadedDocument(
+            String s3Key,
+            String versionId
+    ) {}
+
+    public UploadedDocument uploadIncomingDocument(
             MultipartFile file,
             String issuerId,
             String documentType,
@@ -62,7 +67,8 @@ public class S3DocumentService {
                 .contentType("application/pdf")
                 .build();
 
-        s3Client.putObject(
+        // Capture S3's response after uploading.
+        PutObjectResponse response = s3Client.putObject(
                 request,
                 RequestBody.fromInputStream(
                         file.getInputStream(),
@@ -70,6 +76,14 @@ public class S3DocumentService {
                 )
         );
 
-        return s3Key;
+        String versionId = response.versionId();
+
+        if (versionId == null || versionId.isBlank()) {
+            throw new IllegalStateException(
+                    "S3 did not return an object version ID."
+            );
+        }
+
+        return new UploadedDocument(s3Key, versionId);
     }
 }
