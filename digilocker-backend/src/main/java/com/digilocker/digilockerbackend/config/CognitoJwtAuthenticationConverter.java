@@ -1,0 +1,38 @@
+
+package com.digilocker.digilockerbackend.config;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Component;
+
+@Component
+public class CognitoJwtAuthenticationConverter
+        implements Converter<Jwt, AbstractAuthenticationToken> {
+
+    @Override
+    public AbstractAuthenticationToken convert(Jwt jwt) {
+
+        Collection<GrantedAuthority> authorities = new ArrayList<>();
+
+        List<String> groups =
+                jwt.getClaimAsStringList("cognito:groups");
+
+        if (groups != null) {
+            for (String group : groups) {
+                authorities.add(
+                        new SimpleGrantedAuthority("ROLE_" + group)
+                );
+            }
+        }
+
+        return new JwtAuthenticationToken(jwt, authorities);
+    }
+}

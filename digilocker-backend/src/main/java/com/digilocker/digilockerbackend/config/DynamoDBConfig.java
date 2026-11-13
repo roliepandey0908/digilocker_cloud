@@ -1,33 +1,32 @@
-
 package com.digilocker.digilockerbackend.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
 
 @Configuration
 public class DynamoDBConfig {
 
-    private final Region awsRegion;
-    private final AwsCredentialsProvider credentialsProvider;
-
-    public DynamoDBConfig(
-            Region awsRegion,
-            AwsCredentialsProvider credentialsProvider) {
-
-        this.awsRegion = awsRegion;
-        this.credentialsProvider = credentialsProvider;
-    }
+    @Value("${app.aws.region}")
+    private String region;
 
     @Bean
     public DynamoDbClient dynamoDbClient() {
-
         return DynamoDbClient.builder()
-                .region(awsRegion)
-                .credentialsProvider(credentialsProvider)
+                .region(Region.of(region))
+                .build();
+    }
+
+    @Bean
+    public DynamoDbEnhancedClient dynamoDbEnhancedClient(
+            DynamoDbClient dynamoDbClient) {
+
+        return DynamoDbEnhancedClient.builder()
+                .dynamoDbClient(dynamoDbClient)
                 .build();
     }
 }
