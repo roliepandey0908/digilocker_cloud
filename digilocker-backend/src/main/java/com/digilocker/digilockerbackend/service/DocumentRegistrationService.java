@@ -10,7 +10,11 @@ import software.amazon.awssdk.services.dynamodb.model.Put;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest;
 import software.amazon.awssdk.services.dynamodb.model.Update;
-
+import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
+import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
+import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
+import java.util.ArrayList;
+import java.util.List;
 import java.time.Instant;
 import java.util.Map;
 
@@ -27,6 +31,52 @@ public class DocumentRegistrationService {
 
     public DocumentRegistrationService(DynamoDbClient dynamoDbClient) {
         this.dynamoDbClient = dynamoDbClient;
+    }
+    public Map<String, AttributeValue> getDocumentById(String documentId) {
+
+        return dynamoDbClient.getItem(GetItemRequest.builder()
+                        .tableName(tableName)
+                        .key(Map.of(
+                                "PK", av("DOC#" + documentId),
+                                "SK", av("METADATA")
+                        ))
+                        .consistentRead(true)
+                        .build())
+                .item();
+    }
+    public List<Map<String, AttributeValue>> getIssuedDocumentsByIssuer(
+            String issuerId
+    ) {
+        QueryRequest request = QueryRequest.builder()
+                .tableName(tableName)
+                .keyConditionExpression("PK = :issuerPk")
+                .filterExpression("#status = :issued")
+                .expressionAttributeNames(Map.of(
+                        "#status", "status"
+                ))
+                .expressionAttributeValues(Map.of(
+                        ":issuerPk", av("ISSUER#" + issuerId),
+                        ":issued", av("ISSUED")
+                ))
+                .build();
+
+        List<Map<String, AttributeValue>> documents = new ArrayList<>();
+
+        QueryResponse response;
+
+        do {
+            response = dynamoDbClient.query(request);
+
+            documents.addAll(response.items());
+
+            request = request.toBuilder()
+                    .exclusiveStartKey(response.lastEvaluatedKey())
+                    .build();
+
+        } while (response.lastEvaluatedKey() != null
+                && !response.lastEvaluatedKey().isEmpty());
+
+        return documents;
     }
     public void markDocumentUploaded(
             String documentId,

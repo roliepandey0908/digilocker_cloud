@@ -1,0 +1,217 @@
+openapi: 3.0.3
+info:
+  title: DigiLocker Backend API
+  version: 1.0.0
+  description: Shared REST contract for issuer, citizen, and requester dashboards.
+servers:
+  - url: /api/v1
+paths:
+  /issuer/documents:
+    post:
+      summary: Issue a PDF document to a citizen
+      description: ISSUER role; multipart metadata and one PDF. The backend computes SHA-256.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [metadata, file]
+              properties:
+                metadata:
+                  $ref: '#/components/schemas/IssueDocumentMetadata'
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Document issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '401': { description: Unauthenticated }
+        '403': { description: Not an issuer or outside issuer organization }
+        '413': { description: File too large }
+  /citizen/documents:
+    get:
+      summary: List documents owned by the authenticated citizen
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Citizen document list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Document' }
+  /requester/verification-requests:
+    post:
+      summary: Request consent to verify selected documents
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateVerificationRequest' }
+      responses:
+        '201':
+          description: Request created as PENDING; access is not granted yet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationRequest' }
+        '400': { description: Invalid request or expiry }
+        '403': { description: Not a requester }
+  /requester/verification-requests/{requestId}:
+    get:
+      summary: Read a request created by the authenticated requester
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Request status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationRequest' }
+        '404': { description: Request not found }
+  /citizen/verification-requests:
+    get:
+      summary: List consent requests addressed to the authenticated citizen
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, APPROVED, REJECTED, EXPIRED, REVOKED] }
+      responses:
+        '200':
+          description: Incoming requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/VerificationRequest' }
+  /citizen/verification-requests/{requestId}/decision:
+    post:
+      summary: Approve or reject a pending request
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APPROVE, REJECT] }
+      responses:
+        '200': { description: Decision recorded }
+        '403': { description: Only the target citizen may decide }
+        '409': { description: Request is no longer pending or has expired }
+  /citizen/verification-requests/{requestId}/revoke:
+    post:
+      summary: Revoke an approved consent grant
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Consent revoked }
+        '409': { description: Request has no active approval }
+  /requester/verification-requests/{requestId}/documents/{documentId}/content:
+    get:
+      summary: Read PDF bytes after checking active consent
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: documentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Authorized PDF content
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '403': { description: No valid consent for this document }
+        '404': { description: Document or request not found }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    IssueDocumentMetadata:
+      type: object
+      required: [citizenId, documentType, title]
+      properties:
+        citizenId: { type: string }
+        documentType: { type: string, example: MARKSHEET }
+        title: { type: string }
+    Document:
+      type: object
+      required: [id, documentUri, citizenId, documentType, title, sha256, status, issuedAt]
+      properties:
+        id: { type: string }
+        documentUri: { type: string }
+        citizenId: { type: string }
+        issuerOrganizationId: { type: string }
+        issuerName: { type: string }
+        documentType: { type: string }
+        title: { type: string }
+        fileName: { type: string }
+        mediaType: { type: string, example: application/pdf }
+        sizeBytes: { type: integer, format: int64 }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        status: { type: string, enum: [ACTIVE, REVOKED] }
+        issuedAt: { type: string, format: date-time }
+    CreateVerificationRequest:
+      type: object
+      required: [citizenId, documentIds, purpose, expiresAt]
+      properties:
+        citizenId: { type: string }
+        documentIds:
+          type: array
+          minItems: 1
+          items: { type: string }
+        purpose: { type: string, maxLength: 500 }
+        expiresAt: { type: string, format: date-time }
+    VerificationRequest:
+      type: object
+      required: [id, requesterName, citizenId, purpose, documentIds, status, expiresAt, createdAt]
+      properties:
+        id: { type: string }
+        requesterName: { type: string }
+        citizenId: { type: string }
+        purpose: { type: string }
+        documentIds:
+          type: array
+          items: { type: string }
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, EXPIRED, REVOKED]
+        expiresAt: { type: string, format: date-time }
+        decidedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+

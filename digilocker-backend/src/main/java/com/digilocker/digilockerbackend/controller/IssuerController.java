@@ -7,7 +7,11 @@ import com.digilocker.digilockerbackend.service.DocumentIdGenerator;
 import com.digilocker.digilockerbackend.service.DocumentRegistrationService;
 import com.digilocker.digilockerbackend.service.IssuerIdentityService;
 import com.digilocker.digilockerbackend.service.S3DocumentService;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -158,25 +162,99 @@ public class IssuerController {
                 .status(HttpStatus.CREATED)
                 .body(response);
     }
+    private DocumentResponse toDocumentResponse(
+            Map<String, AttributeValue> item
+    ) {
+        DocumentResponse response = new DocumentResponse();
+
+        response.setDocumentId(getString(item, "documentId"));
+        response.setEnrollmentId(getString(item, "enrollmentId"));
+        response.setDocumentType(getString(item, "documentType"));
+        response.setIssuerId(getString(item, "issuerId"));
+        response.setStatus(getString(item, "status"));
+        response.setDocumentUri(getString(item, "documentUri"));
+
+        String passingYear = getString(item, "passingYear");
+
+        if (passingYear != null) {
+            response.setPassingYear(Integer.valueOf(passingYear));
+        }
+
+        String issuedAt = getString(item, "issuedAt");
+
+        if (issuedAt != null) {
+            response.setIssuedAt(Instant.parse(issuedAt));
+        }
+
+        return response;
+    }
+
+    private String getString(
+            Map<String, AttributeValue> item,
+            String attributeName
+    ) {
+        AttributeValue value = item.get(attributeName);
+
+        return value == null ? null : value.s();
+    }
 
     @GetMapping("/documents")
     @PreAuthorize("hasRole('ISSUER')")
     @Operation(summary = "Get all documents issued by the issuer")
-    public ResponseEntity<DocumentListResponse> getDocuments() {
+    public ResponseEntity<DocumentListResponse> getDocuments(
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        String cognitoSub = jwt.getSubject();
 
-        return ResponseEntity
-                .status(HttpStatus.NOT_IMPLEMENTED)
-                .build();
+        IssuerIdentityService.IssuerProfile issuerProfile =
+                issuerIdentityService.getIssuerProfile(cognitoSub);
+
+        String issuerId = issuerProfile.issuerId();
+
+        List<Map<String, AttributeValue>> items =
+                documentRegistrationService.getIssuedDocumentsByIssuer(issuerId);
+
+        List<DocumentResponse> documents = new ArrayList<>();
+
+        for (Map<String, AttributeValue> item : items) {
+            documents.add(toDocumentResponse(item));
+        }
+
+        DocumentListResponse response = new DocumentListResponse();
+        response.setDocuments(documents);
+        response.setTotalCount(documents.size());
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/documents/{documentId}")
     @PreAuthorize("hasRole('ISSUER')")
     @Operation(summary = "Get document details")
     public ResponseEntity<DocumentResponse> getDocument(
-            @PathVariable String documentId
+            @PathVariable String documentId,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        return ResponseEntity
-                .status(HttpStatus.NOT_IMPLEMENTED)
-                .build();
+        String cognitoSub = jwt.getSubject();
+
+        IssuerIdentityService.IssuerProfile issuerProfile =
+                issuerIdentityService.getIssuerProfile(cognitoSub);
+
+        String issuerId = issuerProfile.issuerId();
+
+        Map<String, AttributeValue> item =
+                documentRegistrationService.getDocumentById(documentId);
+
+        if (item == null || item.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        AttributeValue storedIssuerId = item.get("issuerId");
+
+        if (storedIssuerId == null
+                || !issuerId.equals(storedIssuerId.s())) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(toDocumentResponse(item));
     }
 }
