@@ -34,3 +34,21 @@ The completed implementation was subsequently synchronized with the individual f
 - GET /api/requester/requests
 - POST /api/requester/requests
 - POST /api/requester/requests/{requestId}/verify
+
+## Requester Workflow
+
+1. The requester retrieves the list of available issuers.
+2. The requester selects an issuer and retrieves its supported document types.
+3. The requester submits a document access request with the required citizen and document details.
+4. The requester can retrieve the list of requests created under their identity.
+5. When verifying a request, the backend checks request ownership and consent validity.
+6. Document authenticity is verified using the stored document hash and digital signature.
+7. A time-limited document view URL is generated after successful verification.
+
+## Verification Checks
+
+- Verify that the request belongs to the authenticated requester.
+- Check the request status and consent expiry.
+- Validate document integrity using its stored hash.
+- Verify the document's digital signature.
+- Limit document access through an expiry-bound view URL.
