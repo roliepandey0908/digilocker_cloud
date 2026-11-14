@@ -3,6 +3,9 @@ package com.digilocker.digilockerbackend.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -20,7 +23,31 @@ public class S3DocumentService {
     @Value("${app.aws.s3.bucket-name}")
     private String bucketName;
 
-    public S3DocumentService(S3Client s3Client) {
+    public String generateViewUrl(String key) {
+        return presignPdf(key, "inline");
+    }
+
+    public String generateDownloadUrl(String key) {
+        return presignPdf(key, "attachment");
+    }
+
+    private String presignPdf(String key, String disposition) {
+        var request = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .responseContentType("application/pdf")
+                .responseContentDisposition(disposition)
+                .build();
+        return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
+                .signatureDuration(java.time.Duration.ofMinutes(5))
+                .getObjectRequest(request)
+                .build()).url().toString();
+    }
+
+    private final S3Presigner s3Presigner;
+
+    public S3DocumentService(S3Client s3Client, S3Presigner s3Presigner) {
+        this.s3Presigner = s3Presigner;
         this.s3Client = s3Client;
     }
 
