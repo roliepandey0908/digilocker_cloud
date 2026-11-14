@@ -37,7 +37,37 @@ public class S3DocumentService {
             String s3Key,
             String versionId
     ) {}
+    public String generateViewUrl(String issuedS3Key, Duration validity) {
 
+        if (validity == null || validity.isZero() || validity.isNegative()) {
+            throw new IllegalArgumentException(
+                    "URL validity must be positive"
+            );
+        }
+
+        if (validity.compareTo(Duration.ofDays(7)) > 0) {
+            throw new IllegalArgumentException(
+                    "S3 presigned URL validity cannot exceed 7 days"
+            );
+        }
+
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(issuedS3Key)
+                .responseContentType("application/pdf")
+                .responseContentDisposition("inline")
+                .build();
+
+        GetObjectPresignRequest presignRequest =
+                GetObjectPresignRequest.builder()
+                        .signatureDuration(validity)
+                        .getObjectRequest(getObjectRequest)
+                        .build();
+
+        return s3Presigner.presignGetObject(presignRequest)
+                .url()
+                .toString();
+    }
     public String generateViewUrl(String issuedS3Key) {
 
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
@@ -57,7 +87,19 @@ public class S3DocumentService {
                 .url()
                 .toString();
     }
+    public byte[] getObjectBytes(String s3Key) {
 
+        if (s3Key == null || s3Key.isBlank()) {
+            throw new IllegalArgumentException("S3 key cannot be empty");
+        }
+
+        GetObjectRequest request = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(s3Key)
+                .build();
+
+        return s3Client.getObjectAsBytes(request).asByteArray();
+    }
     public String generateDownloadUrl(String issuedS3Key) {
 
         GetObjectRequest request = GetObjectRequest.builder()

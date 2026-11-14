@@ -5,7 +5,7 @@ import com.digilocker.digilockerbackend.dto.request.AccessRequestCreateRequest;
 import com.digilocker.digilockerbackend.dto.response.AccessRequestListResponse;
 import com.digilocker.digilockerbackend.dto.response.AccessRequestResponse;
 import com.digilocker.digilockerbackend.dto.response.IssuerListResponse;
-import com.digilocker.digilockerbackend.dto.response.VerificationResponse;
+import com.digilocker.digilockerbackend.dto.response.RequesterVerificationResponse;
 import com.digilocker.digilockerbackend.service.CitizenService;
 
 import com.digilocker.digilockerbackend.service.RequesterService;
@@ -68,14 +68,17 @@ public class RequesterController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+
     @GetMapping("/requests")
     @Operation(summary = "Get requests created by the requester")
     public ResponseEntity<AccessRequestListResponse> getRequests(
             @AuthenticationPrincipal Jwt jwt) {
 
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
-    }
+        AccessRequestListResponse response =
+                requesterService.getRequests(jwt.getSubject());
 
+        return ResponseEntity.ok(response);
+    }
     @GetMapping("/requests/{requestId}")
     @Operation(summary = "Get details of an access request")
     public ResponseEntity<AccessRequestResponse> getRequest(
@@ -86,11 +89,16 @@ public class RequesterController {
     }
 
     @PostMapping("/requests/{requestId}/verify")
-    @Operation(summary = "Verify an approved document")
-    public ResponseEntity<VerificationResponse> verifyRequest(
+    @Operation(summary = "Verify consent and document authenticity")
+    public ResponseEntity<RequesterVerificationResponse> verifyRequest(
             @PathVariable String requestId,
             @AuthenticationPrincipal Jwt jwt) {
 
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        RequesterVerificationResponse response =
+                requesterService.verifyRequest(
+                        requestId,
+                        jwt.getSubject());
+
+        return ResponseEntity.ok(response);
     }
 }
