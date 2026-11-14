@@ -1,19 +1,25 @@
-
 package com.digilocker.digilockerbackend.controller;
 
+import java.util.Map;
+
 import com.digilocker.digilockerbackend.dto.request.ConsentDecisionRequest;
+import com.digilocker.digilockerbackend.dto.request.CitizenDocumentSearchRequest;
 import com.digilocker.digilockerbackend.dto.response.AccessRequestListResponse;
 import com.digilocker.digilockerbackend.dto.response.CitizenDocumentListResponse;
 import com.digilocker.digilockerbackend.dto.response.CitizenDocumentResponse;
 import com.digilocker.digilockerbackend.dto.response.ConsentDecisionResponse;
 import com.digilocker.digilockerbackend.dto.response.DownloadLinkResponse;
 import com.digilocker.digilockerbackend.dto.response.IssuerDocumentSearchResponse;
+import com.digilocker.digilockerbackend.dto.response.IssuerListResponse;
+import com.digilocker.digilockerbackend.service.CitizenService;
 
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,68 +28,88 @@ import io.swagger.v3.oas.annotations.Operation;
 @RequestMapping("/api/citizen")
 public class CitizenController {
 
-    @GetMapping("/issuer-documents")
-    @PreAuthorize("hasRole('CITIZEN')")
-    @Operation(summary = "Search documents in the issuer repository")
-    public ResponseEntity<IssuerDocumentSearchResponse> searchIssuerDocuments(
-            @RequestParam(required = false) String enrollmentId,
-            @RequestParam(required = false) String documentType,
-            @RequestParam(required = false) Integer passingYear
-    ) {
+    private final CitizenService citizenService;
 
-        // TODO: Search the simulated issuer repository.
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    public CitizenController(CitizenService citizenService) {
+        this.citizenService = citizenService;
     }
 
-    @PostMapping("/documents/{documentId}/claim")
+    @GetMapping("/issuers")
     @PreAuthorize("hasRole('CITIZEN')")
-    @Operation(summary = "Claim an issued document")
-    public ResponseEntity<CitizenDocumentResponse> claimDocument(
-            @PathVariable String documentId
-    ) {
+    @Operation(summary = "Get available issuers")
+    public ResponseEntity<IssuerListResponse> getIssuers() {
+        return ResponseEntity.ok(citizenService.getIssuers());
+    }
 
-        // TODO: Link the canonical document to the authenticated citizen.
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+    @GetMapping("/issuers/{issuerId}/document-types")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Get document types configured by a selected issuer")
+    public ResponseEntity<?> getIssuerDocumentTypes(
+            @PathVariable String issuerId) {
+
+        return ResponseEntity.ok(
+                citizenService.getIssuerDocumentTypes(issuerId)
+        );
+    }
+
+    @GetMapping("/issuers/{issuerId}/document-types/{documentTypeId}/fields")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Get search fields for an issuer document type")
+    public ResponseEntity<Map<String, Object>> getDocumentTypeFields(
+            @PathVariable String issuerId,
+            @PathVariable String documentTypeId) {
+
+        return ResponseEntity.ok(
+                citizenService.getDocumentTypeFields(
+                        issuerId,
+                        documentTypeId
+                )
+        );
+    }
+
+    @PostMapping("/documents/get")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Find and automatically link an issued document")
+    public ResponseEntity<IssuerDocumentSearchResponse> getDocument(
+            @Valid @RequestBody CitizenDocumentSearchRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        return ResponseEntity.ok(
+                citizenService.getDocument(request, jwt.getSubject())
+        );
     }
 
     @GetMapping("/documents")
-    @PreAuthorize("hasRole('CITIZEN')")
-    @Operation(summary = "Get all documents claimed by the citizen")
-    public ResponseEntity<CitizenDocumentListResponse> getDocuments() {
+    public ResponseEntity<IssuerDocumentSearchResponse> getDocuments(
+            @AuthenticationPrincipal Jwt jwt) {
 
-        // TODO: Fetch the citizen's linked documents.
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        return ResponseEntity.ok(
+                citizenService.getDocuments(jwt.getSubject())
+        );
     }
+
 
     @GetMapping("/documents/{documentId}/download")
-    @PreAuthorize("hasRole('CITIZEN')")
-    @Operation(summary = "Generate a secure document download link")
-    public ResponseEntity<DownloadLinkResponse> downloadDocument(
-            @PathVariable String documentId
-    ) {
+    public ResponseEntity<Map<String, String>> downloadDocument(
+            @PathVariable String documentId,
+            @AuthenticationPrincipal Jwt jwt) {
 
-        // TODO: Check ownership and generate a short-lived S3 URL.
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        String downloadUrl = citizenService.downloadDocument(
+                documentId,
+                jwt.getSubject()
+        );
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "message", "Download link generated successfully.",
+                        "downloadUrl", downloadUrl,
+                        "expiresInSeconds", "300"
+                )
+        );
     }
 
-    @GetMapping("/requests")
-    @PreAuthorize("hasRole('CITIZEN')")
-    @Operation(summary = "Get access requests received by the citizen")
-    public ResponseEntity<AccessRequestListResponse> getRequests() {
 
-        // TODO: Fetch requests addressed to the authenticated citizen.
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
-    }
 
-    @PostMapping("/requests/{requestId}/decision")
-    @PreAuthorize("hasRole('CITIZEN')")
-    @Operation(summary = "Approve or reject an access request")
-    public ResponseEntity<ConsentDecisionResponse> decideRequest(
-            @PathVariable String requestId,
-            @Valid @RequestBody ConsentDecisionRequest request
-    ) {
 
-        // TODO: Check request ownership and save the consent decision.
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
-    }
+
 }

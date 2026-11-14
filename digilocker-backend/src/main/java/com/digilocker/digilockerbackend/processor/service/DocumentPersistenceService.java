@@ -45,8 +45,7 @@ public class DocumentPersistenceService {
     // STEP A: Claim the document before processing or signing it.
     public String claimDocumentForProcessing(
             String incomingKey,
-            String incomingVersionId
-    ) {
+            String incomingVersionId) {
 
         String documentId = extractDocumentId(incomingKey);
 
@@ -60,13 +59,10 @@ public class DocumentPersistenceService {
         );
 
         String issuerId = requiredAttribute(metadata, "issuerId");
-        String enrollmentId = requiredAttribute(metadata, "enrollmentId");
-        String documentType = requiredAttribute(metadata, "documentType");
-        String passingYear = requiredAttribute(metadata, "passingYear");
 
+        // Supports both legacy and dynamic document repository keys.
         String repositorySortKey =
-                "RECORD#" + enrollmentId + "#" + documentType
-                        + "#" + passingYear + "#" + documentId;
+                getRepositorySortKey(metadata, documentId);
 
         String processingToken = UUID.randomUUID().toString();
 
@@ -199,9 +195,10 @@ public class DocumentPersistenceService {
         );
 
         String issuerId = requiredAttribute(metadata, "issuerId");
-        String enrollmentId = requiredAttribute(metadata, "enrollmentId");
-        String documentType = requiredAttribute(metadata, "documentType");
-        String passingYear = requiredAttribute(metadata, "passingYear");
+
+        // Resolve the same repository key used when claiming the document.
+        String repositorySortKey =
+                getRepositorySortKey(metadata, documentId);
 
         if (!"PROCESSING".equals(requiredAttribute(metadata, "status"))
                 || !processingToken.equals(
@@ -238,9 +235,7 @@ public class DocumentPersistenceService {
         updateDocumentRecords(
                 documentId,
                 issuerId,
-                enrollmentId,
-                documentType,
-                passingYear,
+                repositorySortKey,
                 processedDocument,
                 issuedKey,
                 signatureKey,
@@ -252,9 +247,7 @@ public class DocumentPersistenceService {
     private void updateDocumentRecords(
             String documentId,
             String issuerId,
-            String enrollmentId,
-            String documentType,
-            String passingYear,
+            String repositorySortKey,
             DocumentProcessingService.ProcessedDocument processedDocument,
             String issuedKey,
             String signatureKey,
@@ -304,10 +297,6 @@ public class DocumentPersistenceService {
                 .expressionAttributeValues(values)
                 .build();
 
-        String repositorySortKey =
-                "RECORD#" + enrollmentId + "#" + documentType
-                        + "#" + passingYear + "#" + documentId;
-
         Update repositoryUpdate = Update.builder()
                 .tableName(tableName)
                 .key(Map.of(
@@ -340,7 +329,11 @@ public class DocumentPersistenceService {
             Map<String, AttributeValue> latest =
                     getDocumentMetadata(documentId);
 
-            if ("ISSUED".equals(latest.get("status").s())) {
+            AttributeValue latestStatus = latest.get("status");
+
+            if (latestStatus != null
+                    && "ISSUED".equals(latestStatus.s())) {
+
                 throw new AlreadyIssuedException(
                         "Document has already been issued.");
             }
@@ -349,11 +342,42 @@ public class DocumentPersistenceService {
         }
     }
 
+    /**
+     * Legacy documents use:
+     * RECORD#enrollmentId#documentType#passingYear#documentId
+     *
+     * New dynamic documents use:
+     * RECORD#documentId
+     */
+    private String getRepositorySortKey(
+            Map<String, AttributeValue> metadata,
+            String documentId) {
+
+        AttributeValue enrollmentId = metadata.get("enrollmentId");
+        AttributeValue documentType = metadata.get("documentType");
+        AttributeValue passingYear = metadata.get("passingYear");
+
+        if (enrollmentId != null
+                && enrollmentId.s() != null
+                && documentType != null
+                && documentType.s() != null
+                && passingYear != null
+                && passingYear.s() != null) {
+
+            return "RECORD#" + enrollmentId.s()
+                    + "#" + documentType.s()
+                    + "#" + passingYear.s()
+                    + "#" + documentId;
+        }
+
+        return "RECORD#" + documentId;
+    }
+
     private void validateRegisteredObject(
             Map<String, AttributeValue> metadata,
             String incomingKey,
-            String incomingVersionId
-    ) {
+            String incomingVersionId) {
+
         String registeredBucket =
                 requiredAttribute(metadata, "s3Bucket");
 
