@@ -1,53 +1,19 @@
-
 package com.digilocker.digilockerbackend.dto.request;
 
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import java.util.Map;
+
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 
-public class DocumentUploadRequest {
+public record DocumentUploadRequest(
 
-    @NotBlank(message = "Enrollment ID is required")
-    private String enrollmentId;
+        @NotBlank(message = "Document type ID is required")
+        @Size(max = 100)
+        String documentTypeId,
 
-    @NotBlank(message = "Document type is required")
-    @Pattern(
-            regexp = "DEGREE|MARKSHEET",
-            message = "Document type must be DEGREE or MARKSHEET"
-    )
-    private String documentType;
+        @NotEmpty(message = "Document metadata is required")
+        Map<String, Object> metadata
 
-    @NotNull(message = "Passing year is required")
-    @Min(value = 1950, message = "Passing year must be at least 1950")
-    @Max(value = 2100, message = "Invalid passing year")
-    private Integer passingYear;
-
-    public DocumentUploadRequest() {
-    }
-
-    public String getEnrollmentId() {
-        return enrollmentId;
-    }
-
-    public void setEnrollmentId(String enrollmentId) {
-        this.enrollmentId = enrollmentId;
-    }
-
-    public String getDocumentType() {
-        return documentType;
-    }
-
-    public void setDocumentType(String documentType) {
-        this.documentType = documentType;
-    }
-
-    public Integer getPassingYear() {
-        return passingYear;
-    }
-
-    public void setPassingYear(Integer passingYear) {
-        this.passingYear = passingYear;
-    }
+) {
 }

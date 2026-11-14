@@ -7,6 +7,8 @@ public class ConsentDecisionResponse {
     private String requestId;
     private String decision;
     private String consentStatus;
+    private Instant approvalCreatedAt;
+    private Integer consentDurationMinutes;
     private Instant expiresAt;
 
     public ConsentDecisionResponse() {
@@ -34,6 +36,22 @@ public class ConsentDecisionResponse {
 
     public void setConsentStatus(String consentStatus) {
         this.consentStatus = consentStatus;
+    }
+
+    public Instant getApprovalCreatedAt() {
+        return approvalCreatedAt;
+    }
+
+    public void setApprovalCreatedAt(Instant approvalCreatedAt) {
+        this.approvalCreatedAt = approvalCreatedAt;
+    }
+
+    public Integer getConsentDurationMinutes() {
+        return consentDurationMinutes;
+    }
+
+    public void setConsentDurationMinutes(Integer consentDurationMinutes) {
+        this.consentDurationMinutes = consentDurationMinutes;
     }
 
     public Instant getExpiresAt() {

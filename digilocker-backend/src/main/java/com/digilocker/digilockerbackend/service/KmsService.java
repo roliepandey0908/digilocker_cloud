@@ -41,20 +41,53 @@ public class KmsService {
         return kmsClient.sign(request).signature().asByteArray();
     }
 
-    public boolean verifyDigest(byte[] digest, byte[] signature) {
 
+    public boolean verifyDigest(byte[] digest, byte[] signature) {
+        return verifyDigest(
+                digest,
+                signature,
+                keyId,
+                SIGNING_ALGORITHM.name()
+        );
+    }
+
+    public boolean verifyDigest(
+            byte[] digest,
+            byte[] signature,
+            String signingKeyId,
+            String algorithmName
+    ) {
         validateDigest(digest);
 
         if (signature == null || signature.length == 0) {
             throw new IllegalArgumentException("Signature cannot be empty");
         }
 
+        if (signingKeyId == null || signingKeyId.isBlank()) {
+            throw new IllegalArgumentException("KMS key ID cannot be empty");
+        }
+
+        if (algorithmName == null || algorithmName.isBlank()) {
+            throw new IllegalArgumentException("Signing algorithm cannot be empty");
+        }
+
+        SigningAlgorithmSpec algorithm;
+
+        try {
+            algorithm = SigningAlgorithmSpec.valueOf(algorithmName);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(
+                    "Unsupported signing algorithm: " + algorithmName,
+                    ex
+            );
+        }
+
         VerifyRequest request = VerifyRequest.builder()
-                .keyId(keyId)
+                .keyId(signingKeyId)
                 .message(SdkBytes.fromByteArray(digest))
                 .messageType(MessageType.DIGEST)
                 .signature(SdkBytes.fromByteArray(signature))
-                .signingAlgorithm(SIGNING_ALGORITHM)
+                .signingAlgorithm(algorithm)
                 .build();
 
         return kmsClient.verify(request).signatureValid();
