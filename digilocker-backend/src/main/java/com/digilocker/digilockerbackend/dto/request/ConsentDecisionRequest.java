@@ -1,11 +1,12 @@
-
 package com.digilocker.digilockerbackend.dto.request;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
 public class ConsentDecisionRequest {
 
+    @NotBlank(message = "Decision is required")
     @Pattern(
             regexp = "APPROVE|REJECT",
             message = "Decision must be APPROVE or REJECT"
@@ -14,9 +15,9 @@ public class ConsentDecisionRequest {
 
     @Min(
             value = 1,
-            message = "Consent duration must be at least 1 day"
+            message = "Consent duration must be at least 1 minute"
     )
-    private Integer consentDurationDays;
+    private Integer consentDurationMinutes;
 
     public ConsentDecisionRequest() {
     }
@@ -29,11 +30,11 @@ public class ConsentDecisionRequest {
         this.decision = decision;
     }
 
-    public Integer getConsentDurationDays() {
-        return consentDurationDays;
+    public Integer getConsentDurationMinutes() {
+        return consentDurationMinutes;
     }
 
-    public void setConsentDurationDays(Integer consentDurationDays) {
-        this.consentDurationDays = consentDurationDays;
+    public void setConsentDurationMinutes(Integer consentDurationMinutes) {
+        this.consentDurationMinutes = consentDurationMinutes;
     }
 }

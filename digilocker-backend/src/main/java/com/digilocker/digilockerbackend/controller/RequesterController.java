@@ -8,6 +8,7 @@ import com.digilocker.digilockerbackend.dto.response.IssuerListResponse;
 import com.digilocker.digilockerbackend.dto.response.VerificationResponse;
 import com.digilocker.digilockerbackend.service.CitizenService;
 
+import com.digilocker.digilockerbackend.service.RequesterService;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
@@ -28,10 +29,14 @@ import java.util.Map;
 public class RequesterController {
 
     private final CitizenService citizenService;
+    private final RequesterService requesterService;
 
-    public RequesterController(CitizenService citizenService) {
+    public RequesterController(RequesterService requesterService,
+                               CitizenService citizenService) {
+        this.requesterService = requesterService;
         this.citizenService = citizenService;
     }
+
 
     @GetMapping("/issuers")
     @Operation(summary = "Get available issuers")
@@ -55,7 +60,12 @@ public class RequesterController {
             @Valid @RequestBody AccessRequestCreateRequest request,
             @AuthenticationPrincipal Jwt jwt) {
 
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        AccessRequestResponse response = requesterService.createRequest(
+                request,
+                jwt.getSubject()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/requests")

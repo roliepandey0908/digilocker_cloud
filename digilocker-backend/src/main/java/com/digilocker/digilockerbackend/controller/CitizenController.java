@@ -88,6 +88,17 @@ public class CitizenController {
         );
     }
 
+    @GetMapping("/requests")
+    @PreAuthorize("hasRole('CITIZEN')")
+    public ResponseEntity<AccessRequestListResponse> getRequests(
+            @AuthenticationPrincipal Jwt jwt) {
+
+        return ResponseEntity.ok(
+                citizenService.getRequests(jwt.getSubject())
+        );
+    }
+
+
 
     @GetMapping("/documents/{documentId}/download")
     public ResponseEntity<Map<String, String>> downloadDocument(
@@ -108,6 +119,22 @@ public class CitizenController {
         );
     }
 
+    @PostMapping("/requests/{requestId}/decision")
+    @PreAuthorize("hasRole('CITIZEN')")
+    @Operation(summary = "Approve or reject an access request")
+    public ResponseEntity<ConsentDecisionResponse> decideRequest(
+            @PathVariable String requestId,
+            @Valid @RequestBody ConsentDecisionRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        return ResponseEntity.ok(
+                citizenService.decideRequest(
+                        requestId,
+                        jwt.getSubject(),
+                        request
+                )
+        );
+    }
 
 
 

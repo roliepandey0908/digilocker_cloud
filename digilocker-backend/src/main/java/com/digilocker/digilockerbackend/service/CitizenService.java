@@ -1,10 +1,13 @@
 package com.digilocker.digilockerbackend.service;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import com.digilocker.digilockerbackend.dto.request.CitizenDocumentSearchRequest;
+import com.digilocker.digilockerbackend.dto.request.ConsentDecisionRequest;
+import com.digilocker.digilockerbackend.dto.response.ConsentDecisionResponse;
 import com.digilocker.digilockerbackend.dto.response.IssuerDocumentSearchResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -12,19 +15,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.Instant;
-import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
-import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
-import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
+
+import software.amazon.awssdk.services.dynamodb.model.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
-import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
 import com.digilocker.digilockerbackend.dto.response.IssuerListResponse;
-import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
-import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.AttributeType;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersInGroupRequest;
@@ -32,8 +28,6 @@ import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUsersIn
 import software.amazon.awssdk.services.cognitoidentityprovider.model.UserType;
 
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
-import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 
 @Service
 public class CitizenService {
@@ -165,6 +159,249 @@ public class CitizenService {
         }
 
         return s3DocumentService.generateDownloadUrl(issuedS3Key);
+    }
+
+    public com.digilocker.digilockerbackend.dto.response.AccessRequestListResponse
+    getRequests(String citizenId) {
+
+        if (citizenId == null || citizenId.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Citizen identity could not be verified"
+            );
+        }
+
+        List<com.digilocker.digilockerbackend.dto.response.AccessRequestResponse>
+                requests = new ArrayList<>();
+
+        Map<String, AttributeValue> lastEvaluatedKey = null;
+
+        do {
+            QueryRequest.Builder builder = QueryRequest.builder()
+                    .tableName(tableName)
+                    .keyConditionExpression(
+                            "PK = :pk AND begins_with(SK, :sk)"
+                    )
+                    .expressionAttributeValues(Map.of(
+                            ":pk", AttributeValue.builder()
+                                    .s("CITIZEN#" + citizenId).build(),
+                            ":sk", AttributeValue.builder()
+                                    .s("REQUEST#").build()
+                    ));
+
+            if (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty()) {
+                builder.exclusiveStartKey(lastEvaluatedKey);
+            }
+
+            QueryResponse response =
+                    dynamoDbClient.query(builder.build());
+
+            for (Map<String, AttributeValue> item : response.items()) {
+
+                var request =
+                        new com.digilocker.digilockerbackend.dto.response.AccessRequestResponse();
+
+                request.setRequestId(getString(item, "requestId"));
+                request.setCitizenId(getString(item, "citizenId"));
+                request.setRequesterId(getString(item, "requesterId"));
+                request.setDocumentId(getString(item, "documentId"));
+                request.setPurpose(getString(item, "purpose"));
+                request.setStatus(getString(item, "status"));
+
+
+                requests.add(request);
+            }
+
+            lastEvaluatedKey = response.lastEvaluatedKey();
+
+        } while (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty());
+
+        var result =
+                new com.digilocker.digilockerbackend.dto.response.AccessRequestListResponse();
+
+        result.setRequests(requests);
+        result.setTotalCount(requests.size());
+
+        return result;
+    }
+    public ConsentDecisionResponse decideRequest(
+            String requestId,
+            String citizenId,
+            ConsentDecisionRequest request) {
+
+        // Validate authenticated citizen.
+        if (citizenId == null || citizenId.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Citizen identity could not be verified"
+            );
+        }
+
+        if (requestId == null || requestId.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Request ID is required"
+            );
+        }
+
+        if (request == null || request.getDecision() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Decision is required"
+            );
+        }
+
+        String decision = request.getDecision().toUpperCase();
+
+        if (!decision.equals("APPROVE") && !decision.equals("REJECT")) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Decision must be APPROVE or REJECT"
+            );
+        }
+
+        // Build the request key using the authenticated citizen ID.
+        Map<String, AttributeValue> requestKey = Map.of(
+                "PK", AttributeValue.builder()
+                        .s("CITIZEN#" + citizenId)
+                        .build(),
+                "SK", AttributeValue.builder()
+                        .s("REQUEST#" + requestId)
+                        .build()
+        );
+
+        // Retrieve the request and verify ownership.
+        Map<String, AttributeValue> existingRequest =
+                dynamoDbClient.getItem(
+                        GetItemRequest.builder()
+                                .tableName(tableName)
+                                .key(requestKey)
+                                .consistentRead(true)
+                                .build()
+                ).item();
+
+        if (existingRequest == null || existingRequest.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Request not found or does not belong to you"
+            );
+        }
+
+        String currentStatus = getString(existingRequest, "status");
+
+        if (!"PENDING".equals(currentStatus)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This request has already been decided"
+            );
+        }
+
+        Instant now = Instant.now();
+
+        ConsentDecisionResponse result = new ConsentDecisionResponse();
+        result.setRequestId(requestId);
+
+        try {
+
+            if ("APPROVE".equals(decision)) {
+
+                Integer durationMinutes =
+                        request.getConsentDurationMinutes();
+
+                if (durationMinutes == null || durationMinutes <= 0) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "A positive consent duration in minutes is required for approval"
+                    );
+                }
+
+                // Calculate approval and expiry on the server.
+                Instant approvalCreatedAt = Instant.now();
+
+                Instant expiresAt = approvalCreatedAt.plus(
+                        Duration.ofMinutes(durationMinutes)
+                );
+
+                Map<String, AttributeValue> values = new LinkedHashMap<>();
+
+                values.put(":approved", AttributeValue.builder()
+                        .s("APPROVED").build());
+
+                values.put(":pending", AttributeValue.builder()
+                        .s("PENDING").build());
+
+                values.put(":now", AttributeValue.builder()
+                        .s(approvalCreatedAt.toString()).build());
+
+                values.put(":duration", AttributeValue.builder()
+                        .n(durationMinutes.toString()).build());
+
+                values.put(":expiresAt", AttributeValue.builder()
+                        .s(expiresAt.toString()).build());
+
+                dynamoDbClient.updateItem(
+                        UpdateItemRequest.builder()
+                                .tableName(tableName)
+                                .key(requestKey)
+                                .updateExpression(
+                                        "SET #status = :approved, " +
+                                                "updatedAt = :now, " +
+                                                "approvalCreatedAt = :now, " +
+                                                "consentDurationMinutes = :duration, " +
+                                                "consentExpiresAt = :expiresAt"
+                                )
+                                .conditionExpression("#status = :pending")
+                                .expressionAttributeNames(Map.of(
+                                        "#status", "status"
+                                ))
+                                .expressionAttributeValues(values)
+                                .build()
+                );
+
+                result.setDecision("APPROVE");
+                result.setConsentStatus("APPROVED");
+                result.setApprovalCreatedAt(approvalCreatedAt);
+                result.setConsentDurationMinutes(durationMinutes);
+                result.setExpiresAt(expiresAt);
+
+            } else {
+
+                Map<String, AttributeValue> values = Map.of(
+                        ":rejected", AttributeValue.builder()
+                                .s("REJECTED").build(),
+                        ":pending", AttributeValue.builder()
+                                .s("PENDING").build(),
+                        ":now", AttributeValue.builder()
+                                .s(now.toString()).build()
+                );
+
+                dynamoDbClient.updateItem(
+                        UpdateItemRequest.builder()
+                                .tableName(tableName)
+                                .key(requestKey)
+                                .updateExpression(
+                                        "SET #status = :rejected, updatedAt = :now"
+                                )
+                                .conditionExpression("#status = :pending")
+                                .expressionAttributeNames(Map.of(
+                                        "#status", "status"
+                                ))
+                                .expressionAttributeValues(values)
+                                .build()
+                );
+
+                result.setDecision("REJECT");
+                result.setConsentStatus("REJECTED");
+            }
+
+        } catch (ConditionalCheckFailedException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This request has already been decided"
+            );
+        }
+
+        return result;
     }
 
     public IssuerDocumentSearchResponse getDocuments(String citizenId) {
