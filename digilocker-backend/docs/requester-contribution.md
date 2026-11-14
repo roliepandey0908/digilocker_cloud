@@ -23,6 +23,11 @@ The Requester workflow was developed and integrated collaboratively with the tea
 
 The completed implementation was subsequently synchronized with the individual feature/requester-module branch.
 
+## Security
+- All Requester endpoints require the REQUESTER role.
+- The authenticated user's identity is obtained from the JWT token.
+- Request creation and request retrieval are scoped to the authenticated requester.
+
 ## API Endpoints
 - GET /api/requester/issuers
 - GET /api/requester/issuers/{issuerId}/document-types
