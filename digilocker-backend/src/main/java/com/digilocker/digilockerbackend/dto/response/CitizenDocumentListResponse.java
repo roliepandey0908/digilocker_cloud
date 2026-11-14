@@ -27,6 +27,5 @@ public class CitizenDocumentListResponse {
         this.totalCount = totalCount;
     }
 
-    public static class AccessRequestResponse {
-    }
+
 }
