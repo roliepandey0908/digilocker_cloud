@@ -7,16 +7,16 @@ import com.digilocker.digilockerbackend.dto.response.AccessRequestResponse;
 import com.digilocker.digilockerbackend.dto.response.IssuerListResponse;
 import com.digilocker.digilockerbackend.dto.response.RequesterVerificationResponse;
 import com.digilocker.digilockerbackend.service.CitizenService;
-
 import com.digilocker.digilockerbackend.service.RequesterService;
+
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
 
@@ -37,15 +37,20 @@ public class RequesterController {
         this.citizenService = citizenService;
     }
 
-
     @GetMapping("/issuers")
-    @Operation(summary = "Get available issuers")
+    @Operation(
+        summary = "Get available issuers",
+        description = "Returns the list of issuers available to the authenticated requester."
+    )
     public ResponseEntity<IssuerListResponse> getIssuers() {
         return ResponseEntity.ok(citizenService.getIssuers());
     }
 
     @GetMapping("/issuers/{issuerId}/document-types")
-    @Operation(summary = "Get document types offered by an issuer")
+    @Operation(
+        summary = "Get issuer document types",
+        description = "Returns the document types offered by the specified issuer."
+    )
     public ResponseEntity<List<Map<String, Object>>> getIssuerDocumentTypes(
             @PathVariable String issuerId) {
 
@@ -55,7 +60,10 @@ public class RequesterController {
     }
 
     @PostMapping("/requests")
-    @Operation(summary = "Create a document access request")
+    @Operation(
+        summary = "Create a document access request",
+        description = "Creates a new document access request using the authenticated requester's identity."
+    )
     public ResponseEntity<AccessRequestResponse> createRequest(
             @Valid @RequestBody AccessRequestCreateRequest request,
             @AuthenticationPrincipal Jwt jwt) {
@@ -68,9 +76,11 @@ public class RequesterController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-
     @GetMapping("/requests")
-    @Operation(summary = "Get requests created by the requester")
+    @Operation(
+        summary = "Get requests created by the requester",
+        description = "Returns the access requests associated with the authenticated requester."
+    )
     public ResponseEntity<AccessRequestListResponse> getRequests(
             @AuthenticationPrincipal Jwt jwt) {
 
@@ -81,7 +91,10 @@ public class RequesterController {
     }
 
     @PostMapping("/requests/{requestId}/verify")
-    @Operation(summary = "Verify consent and document authenticity")
+    @Operation(
+        summary = "Verify consent and document authenticity",
+        description = "Checks request ownership, consent validity, document integrity, and digital signature before allowing document access."
+    )
     public ResponseEntity<RequesterVerificationResponse> verifyRequest(
             @PathVariable String requestId,
             @AuthenticationPrincipal Jwt jwt) {
