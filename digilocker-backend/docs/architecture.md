@@ -32,9 +32,9 @@ The domain records, API DTOs, application ports, and OpenAPI contract define the
 
 ## Package layout
 
-- pi/controller exposes REST endpoints; pi/dto/request and pi/dto/response hold HTTP payloads.
+- api/controller exposes REST endpoints; api/dto/request and api/dto/response hold HTTP payloads.
 - domain/model holds core records and enums, independent of AWS.
-- pplication/port/in defines use cases; pplication/port/out defines repository/storage interfaces. These are not JPA repositories.
+- application/port/in defines use cases; application/port/out defines repository/storage interfaces. These are not JPA repositories.
 - infrastructure/persistence/local and infrastructure/storage/local are local adapter homes.
 - infrastructure/aws/config and infrastructure/aws/{s3,dynamodb,kms,cognito} group AWS client setup and future adapters.
 - config remains for general Spring configuration; keep AWS-specific configuration under infrastructure/aws/config.
